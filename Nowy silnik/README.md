@@ -1,1 +1,0 @@
-# Silnik2D_PKG_PSK
