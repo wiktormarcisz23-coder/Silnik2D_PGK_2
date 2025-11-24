@@ -1,8 +1,3 @@
-// main.cpp
-// Minimalny, uproszczony silnik 2D zgodny z założeniami instrukcji 1–6.
-// Kompilacja (przykład, Linux/Mingw – dostosuj do swojego środowiska):
-// g++ main.cpp -o silnik2d -lsfml-graphics -lsfml-window -lsfml-system
-
 #include <SFML/Graphics.hpp>
 #include <SFML/Window.hpp>
 #include <SFML/System.hpp>
@@ -12,10 +7,6 @@
 #include <queue>
 #include <memory>
 #include <algorithm>
-
-// ============================================================================
-//  INTERFEJSY BAZOWE (instrukcja 4)
-// ============================================================================
 
 class DrawableObject {
 public:
@@ -48,11 +39,7 @@ public:
     virtual ~ShapeObject() = default;
 };
 
-// ============================================================================
-//  PRYMITYWY: Point2D, LineSegment (instrukcja 2 + 4)
-// ============================================================================
-
-class PrimitiveRenderer;    // dalej
+class PrimitiveRenderer;
 
 class Point2D : public ShapeObject {
     sf::Vector2f m_pos;
@@ -70,7 +57,6 @@ public:
     void setColor(const sf::Color& c) { m_color = c; }
     sf::Color color() const { return m_color; }
 
-    // ShapeObject
     void translate(float dx, float dy) override {
         m_pos.x += dx;
         m_pos.y += dy;
@@ -97,12 +83,11 @@ public:
     }
 };
 
-// Deklaracja teraz, definicja PrimitiveRenderer będzie niżej
 class LineSegment : public ShapeObject {
     Point2D m_a;
     Point2D m_b;
     sf::Color m_color;
-    PrimitiveRenderer* m_renderer;   // aby użyć algorytmu przyrostowego
+    PrimitiveRenderer* m_renderer;
 public:
     LineSegment()
         : m_a(), m_b(), m_color(sf::Color::White), m_renderer(nullptr) {}
@@ -138,13 +123,6 @@ public:
     void draw(sf::RenderTarget& target) override; // zdefiniowane po PrimitiveRenderer
 };
 
-// ============================================================================
-//  PRIMITIVERENDERER (instrukcja 2 + 3)
-//  - odcinek algorytmem przyrostowym
-//  - okrąg / elipsa
-//  - wielokąt + detekcja samoprzecięć
-//  - floodFill / boundaryFill na sf::Image
-// ============================================================================
 
 class PrimitiveRenderer {
     static void putPixel(sf::RenderTarget& target, int x, int y, sf::Color color) {
@@ -156,7 +134,6 @@ class PrimitiveRenderer {
 public:
     PrimitiveRenderer() = default;
 
-    // Domyślny odcinek – korzystamy z linii SFML (dla porównania z algorytmem własnym)
     void drawLineDefault(sf::RenderTarget& target,
                          const sf::Vector2f& a, const sf::Vector2f& b,
                          sf::Color color) {
@@ -167,7 +144,6 @@ public:
         target.draw(verts, 2, sf::Lines);
     }
 
-    // Algorytm przyrostowy odcinka (instrukcja 2)
     void drawLineIncremental(sf::RenderTarget& target,
                              const sf::Vector2f& a, const sf::Vector2f& b,
                              sf::Color color) {
@@ -179,7 +155,6 @@ public:
         float dx = x1 - x0;
         float dy = y1 - y0;
 
-        // Specjalny przypadek: punkt
         if (dx == 0 && dy == 0) {
             putPixel(target, (int)std::round(x0), (int)std::round(y0), color);
             return;
@@ -211,7 +186,6 @@ public:
         }
     }
 
-    // Okrąg – parametryzacja + 8-krotna symetria (instrukcja 3)
     void drawCircle(sf::RenderTarget& target,
                     const sf::Vector2f& center,
                     float R,
@@ -221,7 +195,6 @@ public:
         float x0 = center.x;
         float y0 = center.y;
 
-        // Liczymy tylko dla 0..pi/4, reszta przez symetrię
         unsigned int localSteps = steps;
         for (unsigned int i = 0; i <= localSteps; ++i) {
             float alpha = (pi / 4.f) * (float)i / (float)localSteps;
@@ -281,7 +254,6 @@ public:
         }
     }
 
-    // Pomocnicza funkcja do orientacji (dla detekcji przecięć)
     static float cross(const sf::Vector2f& a,
                        const sf::Vector2f& b,
                        const sf::Vector2f& c) {
@@ -302,33 +274,28 @@ public:
         }
         return false;
     }
-
-    // Rysowanie wielokąta (łamana zamknięta) z kontrolą samoprzecięć
     bool drawPolygon(sf::RenderTarget& target,
                      const std::vector<sf::Vector2f>& pts,
                      sf::Color color) {
         if (pts.size() < 3) return false;
 
-        // Sprawdzamy, czy łamana jest zwyczajna
         std::size_t n = pts.size();
         for (std::size_t i = 0; i < n; ++i) {
             sf::Vector2f a1 = pts[i];
             sf::Vector2f a2 = pts[(i + 1) % n];
             for (std::size_t j = i + 1; j < n; ++j) {
-                // sąsiednie odcinki pomijamy
+
                 if (j == i) continue;
                 if ((j + 1) % n == i || (i + 1) % n == j) continue;
 
                 sf::Vector2f b1 = pts[j];
                 sf::Vector2f b2 = pts[(j + 1) % n];
                 if (segmentsIntersect(a1, a2, b1, b2)) {
-                    // łamana wiązana – przerywamy
                     return false;
                 }
             }
         }
 
-        // Rysowanie odcinków
         for (std::size_t i = 0; i < n; ++i) {
             sf::Vector2f a = pts[i];
             sf::Vector2f b = pts[(i + 1) % n];
@@ -337,13 +304,9 @@ public:
         return true;
     }
 
-    // =====================================================================
-    //  Wypełnianie obszaru przez spójność (instrukcja 3)
-    //  Operujemy na sf::Image – potem można to wyrenderować jako teksturę.
-    // =====================================================================
+    
 
-    // Boundary fill (iteracyjny, sąsiedztwo von Neumanna)
-    void boundaryFill(sf::Image& img,
+        void boundaryFill(sf::Image& img,
                       int x, int y,
                       const sf::Color& fillColor,
                       const sf::Color& boundaryColor) {
@@ -379,7 +342,6 @@ public:
         }
     }
 
-    // Flood fill (iteracyjny, sąsiedztwo von Neumanna)
     void floodFill(sf::Image& img,
                    int x, int y,
                    const sf::Color& fillColor) {
@@ -416,7 +378,6 @@ public:
     }
 };
 
-// Definicja LineSegment::draw – wykorzystuje PrimitiveRenderer, jak wymaga instrukcja 2
 void LineSegment::draw(sf::RenderTarget& target) {
     if (m_renderer) {
         m_renderer->drawLineIncremental(
@@ -426,7 +387,6 @@ void LineSegment::draw(sf::RenderTarget& target) {
             m_color
         );
     } else {
-        // awaryjnie zwykła linia
         sf::Vertex v[2] = {
             sf::Vertex(m_a.position(), m_color),
             sf::Vertex(m_b.position(), m_color)
@@ -435,10 +395,7 @@ void LineSegment::draw(sf::RenderTarget& target) {
     }
 }
 
-// ============================================================================
-//  BitmapHandler / BitmapObject / AnimatedObject / SpriteObject / Player
-//  (instrukcja 5)
-// ============================================================================
+
 
 class BitmapHandler {
 public:
@@ -530,13 +487,11 @@ public:
         }
     }
 
-    // UpdatableObject
     void update(float dt) override {
         animate(dt);
     }
 };
 
-// Prosty gracz – sterowanie klawiaturą (instrukcja 4 + 5)
 class Player : public SpriteObject, public GameObject {
     sf::Vector2f m_velocity {0.f, 0.f};
     float m_speed {150.f}; // piksele / s
@@ -548,16 +503,12 @@ public:
     }
 
     void update(float dt) override {
-        // ruch
         m_sprite.move(m_velocity * dt);
-        // animacja sprite’ów
         SpriteObject::update(dt);
     }
 };
 
-// ============================================================================
-//  ENGINE (instrukcja 1 + 2 + 3 + 4 + 5 + 6)
-// ============================================================================
+
 
 class Engine {
     sf::RenderWindow m_window;
@@ -567,7 +518,6 @@ class Engine {
 
     std::shared_ptr<Player> m_player;
 
-    // Demo flood / boundary fill
     sf::Image  m_imgBoundary;
     sf::Texture m_texBoundary;
     sf::Sprite  m_sprBoundary;
@@ -588,7 +538,6 @@ public:
     bool isOpen() const { return m_window.isOpen(); }
 
     void initPlayer() {
-        // Tworzymy kilka prostych "bitmap" w pamięci zamiast wczytywać pliki.
         const unsigned W = 32;
         const unsigned H = 48;
         std::vector<sf::Texture> frames;
@@ -598,7 +547,6 @@ public:
             img.create(W, H, sf::Color(100 + 30 * i,
                                        100 + 20 * i,
                                        255 - 30 * i));
-            // prosta ramka
             for (unsigned x = 0; x < W; ++x) {
                 img.setPixel(x, 0, sf::Color::Black);
                 img.setPixel(x, H - 1, sf::Color::Black);
@@ -622,11 +570,9 @@ public:
     }
 
     void initFillDemos() {
-        // Boundary fill – prostokąt z konturem
         m_imgBoundary.create(200, 150, sf::Color::White);
         sf::Color boundaryColor = sf::Color::Black;
 
-        // rysujemy kontur prostokąta ręcznie
         for (unsigned x = 10; x < 190; ++x) {
             m_imgBoundary.setPixel(x, 10, boundaryColor);
             m_imgBoundary.setPixel(x, 140, boundaryColor);
@@ -643,9 +589,7 @@ public:
         m_sprBoundary.setTexture(m_texBoundary);
         m_sprBoundary.setPosition(700.f, 50.f);
 
-        // Flood fill – prostokąt jednolitego tła
         m_imgFlood.create(200, 150, sf::Color(240, 240, 255));
-        // czarna ramka tylko dla lepszej widoczności (nie warunek algorytmu)
         for (unsigned x = 0; x < 200; ++x) {
             m_imgFlood.setPixel(x, 0, sf::Color::Black);
             m_imgFlood.setPixel(x, 149, sf::Color::Black);
@@ -671,7 +615,6 @@ public:
     }
 
     void handleInput() {
-        // proste sterowanie graczem
         sf::Vector2f vel(0.f, 0.f);
         if (sf::Keyboard::isKeyPressed(sf::Keyboard::A))
             vel.x -= 1.f;
@@ -682,7 +625,6 @@ public:
         if (sf::Keyboard::isKeyPressed(sf::Keyboard::S))
             vel.y += 1.f;
 
-        // rotacja i skalowanie gracza
         if (sf::Keyboard::isKeyPressed(sf::Keyboard::Q))
             m_player->rotate(-1.f);
         if (sf::Keyboard::isKeyPressed(sf::Keyboard::E))
@@ -692,7 +634,6 @@ public:
         if (sf::Keyboard::isKeyPressed(sf::Keyboard::X))
             m_player->scale(0.999f, 0.999f);
 
-        // ESC zamyka program
         if (sf::Keyboard::isKeyPressed(sf::Keyboard::Escape))
             m_window.close();
 
@@ -706,11 +647,9 @@ public:
     }
 
     void render() {
-        // SFML wewnętrznie używa podwójnego buforowania:
         // clear() -> draw() -> display() (double buffering)
         m_window.clear(sf::Color(220, 220, 220));
 
-        // DEMO rysowania prymitywów (instrukcja 2 + 3)
         // odcinek domyślny vs przyrostowy
         sf::Vector2f p1(50.f, 50.f);
         sf::Vector2f p2(300.f, 100.f);
@@ -720,12 +659,10 @@ public:
         sf::Vector2f p4(300.f, 200.f);
         m_renderer.drawLineIncremental(m_window, p3, p4, sf::Color::Blue);
 
-        // okrąg
         m_renderer.drawCircle(m_window,
                               sf::Vector2f(200.f, 300.f),
                               60.f, sf::Color::Black);
 
-        // elipsa
         m_renderer.drawEllipse(m_window,
                                sf::Vector2f(400.f, 300.f),
                                80.f, 40.f, sf::Color::Black);
@@ -743,7 +680,6 @@ public:
         m_window.draw(m_sprBoundary);
         m_window.draw(m_sprFlood);
 
-        // obiekty gry (w tym Player)
         for (auto& obj : m_objects)
             obj->draw(m_window);
 
@@ -762,12 +698,10 @@ public:
     }
 };
 
-// ============================================================================
-//  main
-// ============================================================================
 
 int main() {
     Engine engine;
     engine.run();
     return 0;
 }
+
